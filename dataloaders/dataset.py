@@ -68,6 +68,12 @@ class VideoDataset(Dataset):
                     for id, label in enumerate(sorted(self.label2index)):
                         f.writelines(str(id+1) + ' ' + label + '\n')
 
+        elif dataset == 'custom':
+            if not os.path.exists('dataloaders/custom_labels.txt'):
+                with open('custom_labels.txt', 'w') as f:
+                    for id, label in enumerate(sorted(self.label2index)):
+                        f.writelines(str(id+1) + ' ' + label + '\n')
+
 
     def __len__(self):
         return len(self.fnames)
@@ -244,8 +250,8 @@ class VideoDataset(Dataset):
 
 if __name__ == "__main__":
     from torch.utils.data import DataLoader
-    train_data = VideoDataset(dataset='ucf101', split='test', clip_len=8, preprocess=False)
-    train_loader = DataLoader(train_data, batch_size=100, shuffle=True, num_workers=4)
+    train_data = VideoDataset(dataset='custom', split='test', clip_len=8, preprocess=False)
+    train_loader = DataLoader(train_data, batch_size=1, shuffle=True, num_workers=1)
 
     for i, sample in enumerate(train_loader):
         inputs = sample[0]

@@ -13,6 +13,7 @@ from torch.autograd import Variable
 
 from dataloaders.dataset import VideoDataset
 from network import C3D_model, R2Plus1D_model, R3D_model
+from vmz.models import r2plus1d_34
 
 # Use GPU if available else revert to CPU
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -22,13 +23,13 @@ nEpochs = 100  # Number of epochs for training
 resume_epoch = 0  # Default is 0, change if want to resume
 useTest = True # See evolution of the test set when training
 nTestInterval = 20 # Run on test set every nTestInterval epochs
-snapshot = 50 # Store a model every snapshot epochs
+snapshot = 10 # Store a model every snapshot epochs
 lr = 1e-3 # Learning rate
 
 dataset = 'custom' # Options: hmdb51 or ucf101
 
 if dataset == 'custom':
-    num_classes=5
+    num_classes=4
 elif dataset == 'hmdb51':
     num_classes=51
 elif dataset == 'ucf101':
@@ -52,7 +53,7 @@ modelName = 'R2Plus1D' # Options: C3D or R2Plus1D or R3D
 saveName = modelName + '-' + dataset
 
 def train_model(dataset=dataset, save_dir=save_dir, num_classes=num_classes, lr=lr,
-                num_epochs=nEpochs, save_epoch=snapshot, useTest=useTest, test_interval=nTestInterval):
+                num_epochs=nEpochs, save_epoch=snapshot, useTest=useTest, test_interval=nTestInterval, finetune=True):
     """
         Args:
             num_classes (int): Number of classes in the data
@@ -64,9 +65,20 @@ def train_model(dataset=dataset, save_dir=save_dir, num_classes=num_classes, lr=
         train_params = [{'params': C3D_model.get_1x_lr_params(model), 'lr': lr},
                         {'params': C3D_model.get_10x_lr_params(model), 'lr': lr * 10}]
     elif modelName == 'R2Plus1D':
-        model = R2Plus1D_model.R2Plus1DClassifier(num_classes=num_classes, layer_sizes=(2, 2, 2, 2))
-        train_params = [{'params': R2Plus1D_model.get_1x_lr_params(model), 'lr': lr},
-                        {'params': R2Plus1D_model.get_10x_lr_params(model), 'lr': lr * 10}]
+        if finetune:
+            model = r2plus1d_34(pretraining="kinetics_8frms")
+            train_params = [
+                {"params": model.stem.parameters(), "lr": 0},
+                {"params": model.layer1.parameters(), "lr": 0.001},
+                {"params": model.layer2.parameters(), "lr": 0.001},
+                {"params": model.layer3.parameters(), "lr": 0.001},
+                {"params": model.layer4.parameters(), "lr": 0.001},
+                {"params": model.fc.parameters(), "lr": 0.1},
+            ]
+        else:
+            model = R2Plus1D_model.R2Plus1DClassifier(num_classes=num_classes, layer_sizes=(2, 2, 2, 2))
+            train_params = [{'params': R2Plus1D_model.get_1x_lr_params(model), 'lr': lr},
+                            {'params': R2Plus1D_model.get_10x_lr_params(model), 'lr': lr * 10}]
     elif modelName == 'R3D':
         model = R3D_model.R3DClassifier(num_classes=num_classes, layer_sizes=(2, 2, 2, 2))
         train_params = model.parameters()
@@ -96,9 +108,9 @@ def train_model(dataset=dataset, save_dir=save_dir, num_classes=num_classes, lr=
     writer = SummaryWriter(log_dir=log_dir)
 
     print('Training model on {} dataset...'.format(dataset))
-    train_dataloader = DataLoader(VideoDataset(dataset=dataset, split='train',clip_len=16), batch_size=20, shuffle=True, num_workers=4)
-    val_dataloader   = DataLoader(VideoDataset(dataset=dataset, split='val',  clip_len=16), batch_size=20, num_workers=4)
-    test_dataloader  = DataLoader(VideoDataset(dataset=dataset, split='test', clip_len=16), batch_size=20, num_workers=4)
+    train_dataloader = DataLoader(VideoDataset(dataset=dataset, split='train',clip_len=8), batch_size=2, shuffle=True, num_workers=1)
+    val_dataloader   = DataLoader(VideoDataset(dataset=dataset, split='val',  clip_len=8), batch_size=2, num_workers=1)
+    test_dataloader  = DataLoader(VideoDataset(dataset=dataset, split='test', clip_len=8), batch_size=2, num_workers=1)
 
     trainval_loaders = {'train': train_dataloader, 'val': val_dataloader}
     trainval_sizes = {x: len(trainval_loaders[x].dataset) for x in ['train', 'val']}
@@ -117,6 +129,7 @@ def train_model(dataset=dataset, save_dir=save_dir, num_classes=num_classes, lr=
             # or being validated. Primarily affects layers such as BatchNorm or Dropout.
             if phase == 'train':
                 # scheduler.step() is to be called once every epoch during training
+                optimizer.step()
                 scheduler.step()
                 model.train()
             else:
@@ -201,4 +214,4 @@ def train_model(dataset=dataset, save_dir=save_dir, num_classes=num_classes, lr=
 
 
 if __name__ == "__main__":
-    train_model()
+    train_model(finetune=True)

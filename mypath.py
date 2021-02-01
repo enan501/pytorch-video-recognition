@@ -16,6 +16,14 @@ class Path(object):
             output_dir = '/path/to/VAR/hmdb51'
 
             return root_dir, output_dir
+
+        elif database == 'custom':
+            # folder that contains class labels
+            root_dir = '/Users/enan/Projects/2020-02/grad-project/pytorch-video-recognition/dataset/custom-dataset'
+
+            output_dir = '/Users/enan/Projects/2020-02/grad-project/pytorch-video-recognition/dataset/VAR/custom-dataset'
+
+            return root_dir, output_dir
         else:
             print('Database {} not available.'.format(database))
             raise NotImplementedError
